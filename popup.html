@@ -5,54 +5,265 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Selected Tabs Bookmark Manager</title>
   <style>
-    :root { color-scheme: light dark; --bg:#f7f7f8; --panel:#fff; --text:#171717; --muted:#6b7280; --border:#d1d5db; --accent:#0f766e; --danger:#b91c1c; }
-    @media (prefers-color-scheme: dark) { :root { --bg:#111827; --panel:#1f2937; --text:#f3f4f6; --muted:#9ca3af; --border:#374151; --accent:#14b8a6; --danger:#f87171; } }
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f8;
+      --panel: #ffffff;
+      --text: #171717;
+      --muted: #6b7280;
+      --border: #d1d5db;
+      --accent: #0f766e;
+      --accent-2: #115e59;
+      --danger: #b91c1c;
+      --warn-bg: #fef3c7;
+      --warn-text: #92400e;
+      --option-bg: #ffffff;
+      --option-text: #171717;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --panel: #1f2937;
+        --text: #f3f4f6;
+        --muted: #9ca3af;
+        --border: #374151;
+        --accent: #14b8a6;
+        --accent-2: #0f766e;
+        --danger: #f87171;
+        --warn-bg: #3f2d12;
+        --warn-text: #fbbf24;
+        --option-bg: #1f2937;
+        --option-text: #f3f4f6;
+      }
+    }
+
     * { box-sizing: border-box; }
-    body { margin:0; font:14px/1.4 system-ui,sans-serif; background:var(--bg); color:var(--text); width:380px; }
-    .wrap { padding:14px; }
-    h1 { font-size:16px; margin:0 0 10px; }
-    p.note { margin:0 0 12px; color:var(--muted); font-size:12px; }
-    .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px; }
-    label { display:block; font-weight:600; margin-bottom:6px; }
-    select, input[type="text"] { width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:transparent; color:inherit; margin-bottom:10px; }
-    .check { display:flex; align-items:start; gap:8px; margin:8px 0; font-weight:400; }
-    .check input { margin-top:2px; }
-    button { width:100%; padding:10px 12px; border:0; border-radius:8px; background:var(--accent); color:white; font-weight:700; cursor:pointer; }
-    #status { margin-top:10px; min-height:18px; font-size:12px; color:var(--muted); white-space:pre-wrap; }
-    .danger { color:var(--danger); }
-    .hidden { display:none; }
+
+    body {
+      margin: 0;
+      width: 410px;
+      font: 14px/1.45 system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      padding: 14px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .note {
+      margin: 0 0 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .highlight-count {
+      margin-bottom: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+      font-weight: 600;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    select,
+    input[type="text"] {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+    }
+
+    select {
+      appearance: auto;
+      -webkit-appearance: menulist;
+    }
+
+    option,
+    optgroup {
+      background: var(--option-bg);
+      color: var(--option-text);
+      -webkit-appearance: none;
+    }
+
+    .radio-group {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .choice {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .choice input {
+      margin-top: 2px;
+    }
+
+    .choice-title {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .choice-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .warning-box {
+      margin: 6px 0 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: var(--warn-bg);
+      color: var(--warn-text);
+      font-size: 12px;
+      border: 1px solid color-mix(in srgb, var(--warn-text) 25%, var(--border));
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-2);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 10px;
+      min-height: 18px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+
+    #status.danger {
+      color: var(--danger);
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Bookmark selected tabs</h1>
-    <p class="note">Save highlighted tabs, the active tab, or all tabs into a new or existing folder.</p>
+    <p class="note">This popup always saves highlighted tabs from the current Brave window.</p>
+
     <div class="panel">
-      <label for="tabMode">Tabs to save</label>
-      <select id="tabMode">
-        <option value="highlighted">Highlighted tabs</option>
-        <option value="active">Active tab</option>
-        <option value="all">All tabs in current window</option>
-      </select>
-      <label for="destMode">Destination</label>
-      <select id="destMode">
-        <option value="existing">Existing folder</option>
-        <option value="new">New folder</option>
-      </select>
-      <div id="existingFolderWrap">
-        <label for="folderSelect">Existing folder</label>
-        <select id="folderSelect"></select>
+      <div class="section-title">Tabs to save</div>
+      <div id="highlightCount" class="highlight-count">Highlighted tabs selected: 0</div>
+
+      <label for="folderSelect">Selected folder</label>
+      <select id="folderSelect"></select>
+
+      <div class="section-title">How to save</div>
+      <div class="radio-group">
+        <label class="choice">
+          <input type="radio" name="saveMode" value="child" checked>
+          <span>
+            <div class="choice-title">Create a new child folder in the selected folder</div>
+            <div class="choice-sub">Recommended when you want to keep each saved tab set grouped separately.</div>
+          </span>
+        </label>
+
+        <label class="choice">
+          <input type="radio" name="saveMode" value="direct">
+          <span>
+            <div class="choice-title">Save directly into the selected folder</div>
+            <div class="choice-sub">Use this if you want to append bookmarks or overwrite bookmarks already in that folder.</div>
+          </span>
+        </label>
       </div>
-      <div id="newFolderWrap" class="hidden">
-        <label for="folderName">New folder name</label>
-        <input id="folderName" type="text" placeholder="e.g. Research tabs April 2026">
+
+      <div id="childFolderWrap">
+        <label for="childFolderName">New child folder name</label>
+        <input id="childFolderName" type="text" placeholder="e.g. Research tabs April 2026">
       </div>
-      <label class="check"><input id="overwrite" type="checkbox"><span>Overwrite selected existing folder before saving</span></label>
-      <label class="check"><input id="recursive" type="checkbox"><span>When overwriting, also delete subfolders recursively</span></label>
-      <button id="saveBtn">Save bookmarks</button>
+
+      <div id="writeModeWrap" class="hidden">
+        <div class="section-title">Write mode</div>
+        <div class="radio-group">
+          <label class="choice">
+            <input type="radio" name="writeMode" value="append" checked>
+            <span>
+              <div class="choice-title">Add bookmarks to this folder</div>
+              <div class="choice-sub">Keep current bookmarks and append the highlighted tabs.</div>
+            </span>
+          </label>
+
+          <label class="choice">
+            <input type="radio" name="writeMode" value="overwrite">
+            <span>
+              <div class="choice-title">Overwrite this folder</div>
+              <div class="choice-sub">Replace existing bookmarks in this folder with the highlighted tabs.</div>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div id="folderWarning" class="warning-box hidden"></div>
+
+      <div class="actions">
+        <button id="saveBtn">Save bookmarks</button>
+      </div>
+
       <div id="status"></div>
     </div>
   </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
