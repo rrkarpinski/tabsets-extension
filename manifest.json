@@ -1,11 +1,11 @@
 {
-  "manifest_version": 3,
-  "name": "Workspace Sync",
-  "version": "2.0.0",
-  "description": "Compare a browser workspace with a bookmark folder and sync the folder to match or merge the current tabs.",
+  "manifest_version": 4,
+  "name": "TabSets Sync",
+  "version": "2.1.0",
+  "description": "Compare your current tab set with a saved set stored as a bookmark folder, then merge or sync changes.",
   "permissions": ["tabs", "bookmarks", "storage"],
   "action": {
-    "default_title": "Workspace Sync",
+    "default_title": "TabSets Sync",
     "default_popup": "popup.html"
   },
   "icons": {

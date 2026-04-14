@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Workspace Sync</title>
+  <title>TabSets Sync</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -56,7 +56,7 @@
 
     body {
       margin: 0;
-      width: 450px;
+      width: 470px;
       font: 14px/1.45 system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
@@ -86,8 +86,7 @@
       font-weight: 600;
     }
 
-    select,
-    input[type="text"] {
+    select {
       width: 100%;
       margin-bottom: 10px;
       padding: 8px 10px;
@@ -95,9 +94,6 @@
       border-radius: 8px;
       background: var(--panel);
       color: var(--text);
-    }
-
-    select {
       appearance: auto;
       -webkit-appearance: menulist;
     }
@@ -108,25 +104,6 @@
       color: var(--option-text);
       -webkit-appearance: none;
     }
-
-    .source-group {
-      display: grid;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .choice {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      padding: 8px 10px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-    }
-
-    .choice input { margin-top: 2px; }
-    .choice-title { font-weight: 600; margin-bottom: 2px; }
-    .choice-sub { font-size: 12px; color: var(--muted); }
 
     .summary-strip {
       margin: 8px 0 12px;
@@ -188,23 +165,44 @@
       margin-bottom: 8px;
     }
 
-    .details-section {
-      margin-top: 10px;
-    }
-
+    .details-section { margin-top: 10px; }
     .details-section-title {
       font-size: 12px;
       font-weight: 700;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
 
     .details-list {
       margin: 0;
-      padding-left: 18px;
-      font-size: 12px;
-      color: var(--muted);
-      max-height: 120px;
+      padding-left: 0;
+      list-style: none;
+      max-height: 148px;
       overflow: auto;
+      display: grid;
+      gap: 8px;
+    }
+
+    .details-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+    }
+
+    .details-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .details-url {
+      font-size: 11px;
+      color: var(--muted);
+      word-break: break-all;
     }
 
     .warning-box {
@@ -215,6 +213,7 @@
       color: var(--warn-text);
       font-size: 12px;
       border: 1px solid color-mix(in srgb, var(--warn-text) 25%, var(--border));
+      white-space: pre-line;
     }
 
     .actions {
@@ -252,47 +251,35 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Workspace Sync</h1>
-    <p class="note">Compare a live workspace with a bookmark folder, then merge or sync the folder to match it.</p>
+    <h1>TabSets Sync</h1>
+    <p class="note">Compare your current set with a saved set stored in bookmarks, then merge or sync the saved set.</p>
 
     <div class="panel">
-      <div class="section-title">Source</div>
-      <div class="source-group">
-        <label class="choice">
-          <input type="radio" name="sourceMode" value="window" checked>
-          <span>
-            <div class="choice-title">Current window tabs</div>
-            <div class="choice-sub">Use all bookmarkable tabs in the current Brave window.</div>
-          </span>
-        </label>
+      <div class="section-title">Current set</div>
+      <label for="modeSelect">Use tabs from</label>
+      <select id="modeSelect">
+        <option value="window">All tabs in this window</option>
+        <option value="highlighted">Highlighted tabs only</option>
+      </select>
 
-        <label class="choice">
-          <input type="radio" name="sourceMode" value="highlighted">
-          <span>
-            <div class="choice-title">Highlighted tabs only</div>
-            <div class="choice-sub">Use only selected tabs in the current window.</div>
-          </span>
-        </label>
-      </div>
+      <div id="sourceSummary" class="summary-strip">Current set contains 0 tab(s).</div>
 
-      <div id="sourceSummary" class="summary-strip">Source contains 0 tab(s).</div>
-
-      <label for="folderSelect">Target folder</label>
+      <label for="folderSelect">Saved set folder</label>
       <select id="folderSelect"></select>
       <div id="folderPathPreview" class="path-preview"></div>
 
       <div class="section-title">Diff</div>
       <div class="diff-grid">
         <div class="diff-card same">
-          <div class="diff-label">Unchanged</div>
+          <div class="diff-label">Already saved</div>
           <div id="sameCount" class="diff-value">0</div>
         </div>
         <div class="diff-card add">
-          <div class="diff-label">New in source</div>
+          <div class="diff-label">Only in current set</div>
           <div id="addCount" class="diff-value">0</div>
         </div>
         <div class="diff-card remove">
-          <div class="diff-label">Only in folder</div>
+          <div class="diff-label">Only in saved set</div>
           <div id="removeCount" class="diff-value">0</div>
         </div>
       </div>
@@ -301,17 +288,17 @@
         <summary>Show diff details</summary>
 
         <div class="details-section">
-          <div class="details-section-title">New in source</div>
+          <div class="details-section-title">Only in current set</div>
           <ul id="addList" class="details-list"></ul>
         </div>
 
         <div class="details-section">
-          <div class="details-section-title">Only in folder</div>
+          <div class="details-section-title">Only in saved set</div>
           <ul id="removeList" class="details-list"></ul>
         </div>
 
         <div class="details-section">
-          <div class="details-section-title">Unchanged</div>
+          <div class="details-section-title">Already saved</div>
           <ul id="sameList" class="details-list"></ul>
         </div>
       </details>
@@ -319,8 +306,8 @@
       <div id="warningBox" class="warning-box"></div>
 
       <div class="actions">
-        <button id="mergeBtn">Merge into folder</button>
-        <button id="syncBtn" class="danger-btn">Sync folder to source</button>
+        <button id="mergeBtn">Merge into saved set</button>
+        <button id="syncBtn" class="danger-btn">Sync saved set</button>
       </div>
 
       <div id="status"></div>
