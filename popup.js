@@ -185,7 +185,6 @@ function updateModeVisibility() {
 }
 
 async function updateFolderWarning() {
-  resetOverwriteDecision();
   clearWarning();
 
   if (!saveDirectly.checked || getSelectedWriteMode() !== 'overwrite') {
@@ -208,6 +207,31 @@ async function updateFolderWarning() {
   const bookmarks = children.filter(item => !!item.url);
 
   if (subfolders.length > 0) {
+    if (overwriteDecision !== null) {
+      renderOverwriteWarning(
+        overwriteDecision.recursive
+          ? `This folder contains ${bookmarks.length} bookmark(s) and ${subfolders.length} subfolder(s). Selected overwrite mode: recursive overwrite.`
+          : `This folder contains ${bookmarks.length} bookmark(s) and ${subfolders.length} subfolder(s). Selected overwrite mode: overwrite bookmarks and keep folders.`,
+        [
+          {
+            label: 'Change to recursive overwrite',
+            onClick: () => {
+              overwriteDecision = { recursive: true };
+              updateFolderWarning();
+            }
+          },
+          {
+            label: 'Change to keep folders',
+            onClick: () => {
+              overwriteDecision = { recursive: false };
+              updateFolderWarning();
+            }
+          }
+        ]
+      );
+      return;
+    }
+
     renderOverwriteWarning(
       `This folder currently contains ${bookmarks.length} bookmark(s) and ${subfolders.length} subfolder(s). Choose how overwrite should behave:`,
       [
@@ -325,17 +349,20 @@ async function handleSave() {
 }
 
 folderSelect.addEventListener('change', async () => {
+  resetOverwriteDecision();
   await persistSelectedFolder();
   await updateFolderWarning();
 });
 
 saveDirectly.addEventListener('change', async () => {
+  resetOverwriteDecision();
   updateModeVisibility();
   await updateFolderWarning();
 });
 
 for (const radio of document.querySelectorAll('input[name="writeMode"]')) {
   radio.addEventListener('change', async () => {
+    resetOverwriteDecision();
     await updateFolderWarning();
   });
 }
