@@ -53,39 +53,39 @@
     }
 
     * { box-sizing: border-box; }
-
     body {
       margin: 0;
-      width: 470px;
+      width: 510px;
       font: 14px/1.45 system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
     }
-
     .wrap { padding: 14px; }
     h1 { margin: 0 0 8px; font-size: 16px; }
     .note { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
-
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 12px;
-      margin-bottom: 12px;
     }
-
+    .row-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
     .section-title {
       font-size: 13px;
       font-weight: 700;
-      margin-bottom: 8px;
+      margin: 0;
     }
-
     label {
       display: block;
       margin-bottom: 6px;
       font-weight: 600;
     }
-
     select {
       width: 100%;
       margin-bottom: 10px;
@@ -97,14 +97,15 @@
       appearance: auto;
       -webkit-appearance: menulist;
     }
-
-    option,
-    optgroup {
+    option, optgroup {
       background: var(--option-bg);
       color: var(--option-text);
       -webkit-appearance: none;
     }
-
+    .mode-select {
+      width: 240px;
+      margin: 0;
+    }
     .summary-strip {
       margin: 8px 0 12px;
       padding: 10px;
@@ -112,32 +113,33 @@
       background: color-mix(in srgb, var(--accent) 10%, transparent);
       border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
       font-weight: 600;
+      white-space: pre-line;
     }
-
+    .helper {
+      margin: -4px 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
     .path-preview {
       margin: -4px 0 10px;
       font-size: 12px;
       color: var(--muted);
       word-break: break-word;
     }
-
     .diff-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
       margin-bottom: 12px;
     }
-
     .diff-card {
       border-radius: 8px;
       padding: 10px;
       border: 1px solid var(--border);
     }
-
     .diff-card.same { background: var(--same-bg); color: var(--same-text); }
     .diff-card.add { background: var(--add-bg); color: var(--add-text); }
     .diff-card.remove { background: var(--remove-bg); color: var(--remove-text); }
-
     .diff-label {
       font-size: 11px;
       text-transform: uppercase;
@@ -145,83 +147,65 @@
       opacity: 0.9;
       margin-bottom: 4px;
     }
-
     .diff-value {
       font-size: 22px;
       font-weight: 800;
       line-height: 1;
     }
-
     .details-box {
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 10px;
       margin-bottom: 12px;
     }
-
     .details-box summary {
       cursor: pointer;
       font-weight: 600;
       margin-bottom: 8px;
     }
-
     .details-section { margin-top: 10px; }
     .details-section-title {
       font-size: 12px;
       font-weight: 700;
       margin-bottom: 6px;
     }
-
     .details-list {
       margin: 0;
       padding-left: 0;
       list-style: none;
-      max-height: 148px;
-      overflow: auto;
+      max-height: 160px;
+      overflow-y: auto;
+      overflow-x: auto;
       display: grid;
-      gap: 8px;
+      gap: 4px;
     }
-
-    .details-item {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 10px;
-      background: color-mix(in srgb, var(--panel) 88%, var(--bg));
-    }
-
-    .details-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 2px;
+    .details-entry {
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 12px;
+      color: var(--text);
     }
-
+    .details-name {
+      color: var(--text);
+    }
     .details-url {
-      font-size: 11px;
       color: var(--muted);
-      word-break: break-all;
     }
-
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 8px 10px;
+      align-items: stretch;
+    }
     .warning-box {
-      margin: 6px 0 10px;
       padding: 10px;
       border-radius: 8px;
       background: var(--warn-bg);
       color: var(--warn-text);
       font-size: 12px;
       border: 1px solid color-mix(in srgb, var(--warn-text) 25%, var(--border));
-      white-space: pre-line;
+      display: flex;
+      align-items: center;
     }
-
-    .actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
     button {
       width: 100%;
       padding: 10px 12px;
@@ -232,12 +216,10 @@
       font-weight: 700;
       cursor: pointer;
     }
-
     button:hover { background: var(--accent-2); }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     .danger-btn { background: var(--danger); }
     .danger-btn:hover { background: var(--danger-2); }
-
     #status {
       margin-top: 10px;
       min-height: 18px;
@@ -245,26 +227,28 @@
       color: var(--muted);
       white-space: pre-wrap;
     }
-
     #status.danger { color: var(--danger); }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>TabSets Sync</h1>
-    <p class="note">Compare your current set with a saved set stored in bookmarks, then merge or sync the saved set.</p>
+    <p class="note">Track changes between your current tabs and a saved tab set. Stored as a bookmark folder.</p>
 
     <div class="panel">
-      <div class="section-title">Current set</div>
-      <label for="modeSelect">Use tabs from</label>
-      <select id="modeSelect">
-        <option value="window">All tabs in this window</option>
-        <option value="highlighted">Highlighted tabs only</option>
-      </select>
+      <div class="row-title">
+        <div class="section-title">Current set</div>
+        <select id="modeSelect" class="mode-select" aria-label="Current set mode">
+          <option value="window">All window tabs</option>
+          <option value="highlighted">Highlighted tabs</option>
+        </select>
+      </div>
 
-      <div id="sourceSummary" class="summary-strip">Current set contains 0 tab(s).</div>
+      <div id="sourceSummary" class="summary-strip">Current set: 0 unique tab(s)
+Saved set: 0 item(s)</div>
 
       <label for="folderSelect">Saved set folder</label>
+      <div class="helper">Choose the bookmark folder that stores this tab set.</div>
       <select id="folderSelect"></select>
       <div id="folderPathPreview" class="path-preview"></div>
 
@@ -303,11 +287,12 @@
         </div>
       </details>
 
-      <div id="warningBox" class="warning-box"></div>
-
-      <div class="actions">
+      <div class="actions-grid">
         <button id="mergeBtn">Merge into saved set</button>
+        <div id="mergeInfo" class="warning-box"></div>
+
         <button id="syncBtn" class="danger-btn">Sync saved set</button>
+        <div id="syncInfo" class="warning-box"></div>
       </div>
 
       <div id="status"></div>
