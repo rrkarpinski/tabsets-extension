@@ -42,7 +42,7 @@
 
     body {
       margin: 0;
-      width: 410px;
+      width: 420px;
       font: 14px/1.45 system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
@@ -115,6 +115,35 @@
       -webkit-appearance: none;
     }
 
+    .choice-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0 12px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .choice-line input {
+      margin: 0;
+    }
+
+    .choice-line-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .choice-line-title {
+      font-weight: 600;
+    }
+
+    .choice-line-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
     .radio-group {
       display: grid;
       gap: 8px;
@@ -154,14 +183,33 @@
       border: 1px solid color-mix(in srgb, var(--warn-text) 25%, var(--border));
     }
 
-    .hidden {
-      display: none;
-    }
-
-    .actions {
+    .warning-actions {
       display: flex;
       gap: 8px;
-      align-items: center;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .warning-actions button {
+      width: auto;
+      min-width: 0;
+      flex: 1 1 120px;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .secondary-btn {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .secondary-btn:hover {
+      background: color-mix(in srgb, var(--text) 8%, transparent);
+    }
+
+    .hidden {
+      display: none;
     }
 
     button {
@@ -209,24 +257,13 @@
       <label for="folderSelect">Selected folder</label>
       <select id="folderSelect"></select>
 
-      <div class="section-title">How to save</div>
-      <div class="radio-group">
-        <label class="choice">
-          <input type="radio" name="saveMode" value="child" checked>
-          <span>
-            <div class="choice-title">Create a new child folder in the selected folder</div>
-            <div class="choice-sub">Recommended when you want to keep each saved tab set grouped separately.</div>
-          </span>
-        </label>
-
-        <label class="choice">
-          <input type="radio" name="saveMode" value="direct">
-          <span>
-            <div class="choice-title">Save directly into the selected folder</div>
-            <div class="choice-sub">Use this if you want to append bookmarks or overwrite bookmarks already in that folder.</div>
-          </span>
-        </label>
-      </div>
+      <label class="choice-line">
+        <input id="saveDirectly" type="checkbox">
+        <span class="choice-line-text">
+          <span class="choice-line-title">Save directly in the selected folder</span>
+          <span class="choice-line-sub">If unchecked, a new child folder will be created inside the selected folder.</span>
+        </span>
+      </label>
 
       <div id="childFolderWrap">
         <label for="childFolderName">New child folder name</label>
@@ -256,10 +293,7 @@
 
       <div id="folderWarning" class="warning-box hidden"></div>
 
-      <div class="actions">
-        <button id="saveBtn">Save bookmarks</button>
-      </div>
-
+      <button id="saveBtn">Save bookmarks</button>
       <div id="status"></div>
     </div>
   </div>

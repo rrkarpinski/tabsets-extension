@@ -1,9 +1,9 @@
 {
-  "manifest_version": 1,
+  "manifest_version": 2,
   "name": "Selected Tabs Bookmark Manager",
-  "version": "1.0.0",
-  "description": "Save highlighted tabs, active tab, or all tabs into a new or existing bookmark folder, with optional overwrite.",
-  "permissions": ["tabs", "bookmarks"],
+  "version": "1.1.0",
+  "description": "Save highlighted tabs into bookmark folders, with support for existing folders, new child folders, and safe overwrite options.",
+  "permissions": ["tabs", "bookmarks", "storage"],
   "action": {
     "default_title": "Selected Tabs Bookmark Manager",
     "default_popup": "popup.html"

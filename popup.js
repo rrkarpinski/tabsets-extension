@@ -1,4 +1,7 @@
+const STORAGE_KEY_LAST_FOLDER_ID = 'lastSelectedFolderId';
+
 const folderSelect = document.getElementById('folderSelect');
+const saveDirectly = document.getElementById('saveDirectly');
 const childFolderWrap = document.getElementById('childFolderWrap');
 const childFolderName = document.getElementById('childFolderName');
 const writeModeWrap = document.getElementById('writeModeWrap');
@@ -9,6 +12,8 @@ const statusEl = document.getElementById('status');
 
 let highlightedTabs = [];
 let folderMap = new Map();
+let protectedFolderIds = new Set();
+let overwriteDecision = null;
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -35,16 +40,13 @@ function flattenFolders(nodes, depth = 0, out = []) {
       out.push({
         id: node.id,
         title: folderDepthTitle(node, depth),
-        rawTitle: node.title || '(untitled folder)'
+        rawTitle: node.title || '(untitled folder)',
+        parentId: node.parentId || null
       });
       if (node.children?.length) flattenFolders(node.children, depth + 1, out);
     }
   }
   return out;
-}
-
-function getSelectedSaveMode() {
-  return document.querySelector('input[name="saveMode"]:checked').value;
 }
 
 function getSelectedWriteMode() {
@@ -56,6 +58,28 @@ function filterBookmarkableTabs(tabs) {
     const url = tab.url || '';
     return /^https?:/i.test(url) || /^file:/i.test(url);
   });
+}
+
+function isDirectChildOfRoot(folder) {
+  return folder && folder.parentId === '0';
+}
+
+function isProtectedOverwriteFolder(folderId) {
+  return protectedFolderIds.has(folderId);
+}
+
+function buildFolderPath(folderId) {
+  const parts = [];
+  let current = folderMap.get(folderId);
+
+  while (current && current.id !== '0') {
+    if (current.rawTitle && current.rawTitle !== '(untitled folder)') {
+      parts.unshift(current.rawTitle);
+    }
+    current = current.parentId ? folderMap.get(current.parentId) : null;
+  }
+
+  return parts.join('/');
 }
 
 async function loadHighlightedTabs() {
@@ -76,44 +100,140 @@ async function loadFolders() {
   const tree = await chrome.bookmarks.getTree();
   const folders = flattenFolders(tree);
   folderMap = new Map(folders.map(folder => [folder.id, folder]));
-  folderSelect.innerHTML = folders
+
+  protectedFolderIds = new Set(
+    folders
+      .filter(folder => folder.parentId === '0' && folder.rawTitle !== '(untitled folder)')
+      .map(folder => folder.id)
+  );
+
+  const selectableFolders = folders.filter(folder => folder.id !== '0');
+
+  folderSelect.innerHTML = selectableFolders
     .map(folder => `<option value="${escapeHtml(folder.id)}">${escapeHtml(folder.title)}</option>`)
     .join('');
+
+  const stored = await chrome.storage.local.get(STORAGE_KEY_LAST_FOLDER_ID);
+  const storedFolderId = stored[STORAGE_KEY_LAST_FOLDER_ID];
+
+  if (storedFolderId && selectableFolders.some(folder => folder.id === storedFolderId)) {
+    folderSelect.value = storedFolderId;
+    return;
+  }
+
+  const bookmarksBar = selectableFolders.find(
+    folder => folder.parentId === '0' && /bookmark/i.test(folder.rawTitle) && /bar/i.test(folder.rawTitle)
+  );
+  const otherBookmarks = selectableFolders.find(
+    folder => folder.parentId === '0' && /other/i.test(folder.rawTitle)
+  );
+  const fallback = bookmarksBar || otherBookmarks || selectableFolders[0];
+
+  if (fallback) {
+    folderSelect.value = fallback.id;
+  }
+}
+
+async function persistSelectedFolder() {
+  const folderId = folderSelect.value;
+  if (!folderId) return;
+  await chrome.storage.local.set({ [STORAGE_KEY_LAST_FOLDER_ID]: folderId });
 }
 
 async function getFolderChildren(folderId) {
   return chrome.bookmarks.getChildren(folderId);
 }
 
+function resetOverwriteDecision() {
+  overwriteDecision = null;
+}
+
+function renderOverwriteWarning(message, actions = []) {
+  folderWarning.innerHTML = '';
+  folderWarning.classList.remove('hidden');
+
+  const text = document.createElement('div');
+  text.textContent = message;
+  folderWarning.appendChild(text);
+
+  if (actions.length > 0) {
+    const actionsWrap = document.createElement('div');
+    actionsWrap.className = 'warning-actions';
+
+    for (const action of actions) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = action.label;
+      if (action.secondary) button.classList.add('secondary-btn');
+      button.addEventListener('click', action.onClick);
+      actionsWrap.appendChild(button);
+    }
+
+    folderWarning.appendChild(actionsWrap);
+  }
+}
+
+function clearWarning() {
+  folderWarning.innerHTML = '';
+  folderWarning.classList.add('hidden');
+}
+
 function updateModeVisibility() {
-  const saveMode = getSelectedSaveMode();
-  const isChildMode = saveMode === 'child';
-  childFolderWrap.classList.toggle('hidden', !isChildMode);
-  writeModeWrap.classList.toggle('hidden', isChildMode);
+  const direct = saveDirectly.checked;
+  childFolderWrap.classList.toggle('hidden', direct);
+  writeModeWrap.classList.toggle('hidden', !direct);
 }
 
 async function updateFolderWarning() {
-  folderWarning.classList.add('hidden');
-  folderWarning.textContent = '';
+  resetOverwriteDecision();
+  clearWarning();
 
-  if (getSelectedSaveMode() !== 'direct' || getSelectedWriteMode() !== 'overwrite') {
+  if (!saveDirectly.checked || getSelectedWriteMode() !== 'overwrite') {
     return;
   }
 
   const folderId = folderSelect.value;
   if (!folderId) return;
 
+  const selectedFolder = folderMap.get(folderId);
+  if (isProtectedOverwriteFolder(folderId) && isDirectChildOfRoot(selectedFolder)) {
+    renderOverwriteWarning(
+      'Overwrite is disabled for top-level folders like Bookmarks Bar and Other bookmarks. You can still append there or create a child folder inside them.'
+    );
+    return;
+  }
+
   const children = await getFolderChildren(folderId);
   const subfolders = children.filter(item => !item.url);
   const bookmarks = children.filter(item => !!item.url);
 
   if (subfolders.length > 0) {
-    folderWarning.textContent = `This folder currently contains ${bookmarks.length} bookmark(s) and ${subfolders.length} subfolder(s). When you save, you will be asked whether to overwrite recursively or overwrite bookmarks and keep folders.`;
-    folderWarning.classList.remove('hidden');
-  } else {
-    folderWarning.textContent = `This folder currently contains ${bookmarks.length} bookmark(s) and no subfolders. Overwrite will replace those bookmarks only.`;
-    folderWarning.classList.remove('hidden');
+    renderOverwriteWarning(
+      `This folder currently contains ${bookmarks.length} bookmark(s) and ${subfolders.length} subfolder(s). Choose how overwrite should behave:`,
+      [
+        {
+          label: 'Overwrite recursively',
+          onClick: () => {
+            overwriteDecision = { recursive: true };
+            updateFolderWarning();
+          }
+        },
+        {
+          label: 'Overwrite bookmarks, keep folders',
+          onClick: () => {
+            overwriteDecision = { recursive: false };
+            updateFolderWarning();
+          }
+        }
+      ]
+    );
+    return;
   }
+
+  overwriteDecision = { recursive: false };
+  renderOverwriteWarning(
+    `This folder currently contains ${bookmarks.length} bookmark(s) and no subfolders. Overwrite will replace those bookmarks only.`
+  );
 }
 
 async function removeFolderContents(folderId, recursive) {
@@ -137,28 +257,6 @@ async function createBookmarks(folderId, tabs) {
   }
 }
 
-async function askOverwriteBehaviorIfNeeded(folderId) {
-  const children = await chrome.bookmarks.getChildren(folderId);
-  const hasSubfolders = children.some(item => !item.url);
-
-  if (!hasSubfolders) {
-    const proceed = confirm('Overwrite this folder? Existing bookmarks in the selected folder will be replaced.');
-    return proceed ? { proceed: true, recursive: false } : { proceed: false, recursive: false };
-  }
-
-  const recursive = confirm(
-    'This folder contains subfolders.\n\nPress OK to overwrite recursively (delete bookmarks and subfolders inside it).\nPress Cancel to keep subfolders and overwrite bookmarks only.'
-  );
-
-  const proceed = confirm(
-    recursive
-      ? 'Confirm recursive overwrite? This deletes bookmarks and subfolders inside the selected folder before saving.'
-      : 'Confirm overwrite while keeping subfolders? This deletes existing bookmarks in the selected folder but keeps its subfolders.'
-  );
-
-  return { proceed, recursive };
-}
-
 async function handleSave() {
   try {
     saveBtn.disabled = true;
@@ -173,13 +271,11 @@ async function handleSave() {
       throw new Error('Please choose a folder.');
     }
 
-    const selectedFolder = folderMap.get(selectedFolderId);
-    const saveMode = getSelectedSaveMode();
+    await persistSelectedFolder();
 
     let targetFolderId = selectedFolderId;
-    let targetFolderName = selectedFolder?.rawTitle || 'selected folder';
 
-    if (saveMode === 'child') {
+    if (!saveDirectly.checked) {
       const name = childFolderName.value.trim();
       if (!name) {
         throw new Error('Please enter a name for the new child folder.');
@@ -191,21 +287,36 @@ async function handleSave() {
       });
 
       targetFolderId = createdFolder.id;
-      targetFolderName = name;
+      folderMap.set(createdFolder.id, {
+        id: createdFolder.id,
+        rawTitle: name,
+        title: name,
+        parentId: selectedFolderId
+      });
     } else {
       const writeMode = getSelectedWriteMode();
+      const selectedFolder = folderMap.get(selectedFolderId);
+
       if (writeMode === 'overwrite') {
-        const overwriteDecision = await askOverwriteBehaviorIfNeeded(selectedFolderId);
-        if (!overwriteDecision.proceed) {
-          setStatus('Cancelled.');
-          return;
+        if (isProtectedOverwriteFolder(selectedFolderId) && isDirectChildOfRoot(selectedFolder)) {
+          throw new Error('Overwrite is not allowed for Bookmarks Bar or Other bookmarks.');
         }
+
+        if (overwriteDecision === null) {
+          throw new Error('Please choose the overwrite behavior in the warning box first.');
+        }
+
         await removeFolderContents(selectedFolderId, overwriteDecision.recursive);
       }
     }
 
+    const fullPath =
+      buildFolderPath(targetFolderId) ||
+      folderMap.get(targetFolderId)?.rawTitle ||
+      'selected folder';
+
     await createBookmarks(targetFolderId, highlightedTabs);
-    setStatus(`Saved ${highlightedTabs.length} highlighted tab(s) to "${targetFolderName}".`);
+    setStatus(`Saved ${highlightedTabs.length} highlighted tab(s) to "${fullPath}".`);
   } catch (error) {
     setStatus(error.message || String(error), true);
   } finally {
@@ -214,12 +325,17 @@ async function handleSave() {
 }
 
 folderSelect.addEventListener('change', async () => {
+  await persistSelectedFolder();
   await updateFolderWarning();
 });
 
-for (const radio of document.querySelectorAll('input[name="saveMode"], input[name="writeMode"]')) {
+saveDirectly.addEventListener('change', async () => {
+  updateModeVisibility();
+  await updateFolderWarning();
+});
+
+for (const radio of document.querySelectorAll('input[name="writeMode"]')) {
   radio.addEventListener('change', async () => {
-    updateModeVisibility();
     await updateFolderWarning();
   });
 }
