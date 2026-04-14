@@ -24,8 +24,6 @@
       --add-text: #166534;
       --remove-bg: #fee2e2;
       --remove-text: #991b1b;
-      --option-bg: #ffffff;
-      --option-text: #171717;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -47,8 +45,6 @@
         --add-text: #86efac;
         --remove-bg: #3b1d1d;
         --remove-text: #fca5a5;
-        --option-bg: #1f2937;
-        --option-text: #f3f4f6;
       }
     }
 
@@ -70,16 +66,31 @@
       padding: 12px;
     }
     .row-title {
-      display: flex;
+      display: grid;
+      grid-template-columns: auto 1fr;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
+      gap: 12px;
       margin-bottom: 8px;
     }
     .section-title {
       font-size: 13px;
       font-weight: 700;
       margin: 0;
+    }
+    .mode-inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .mode-card {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
     }
     label {
       display: block;
@@ -94,17 +105,6 @@
       border-radius: 8px;
       background: var(--panel);
       color: var(--text);
-      appearance: auto;
-      -webkit-appearance: menulist;
-    }
-    option, optgroup {
-      background: var(--option-bg);
-      color: var(--option-text);
-      -webkit-appearance: none;
-    }
-    .mode-select {
-      width: 240px;
-      margin: 0;
     }
     .summary-strip {
       margin: 8px 0 12px;
@@ -184,15 +184,11 @@
       font-size: 12px;
       color: var(--text);
     }
-    .details-name {
-      color: var(--text);
-    }
-    .details-url {
-      color: var(--muted);
-    }
-    .actions-grid {
+    .details-name { color: var(--text); }
+    .details-url { color: var(--muted); }
+    .action-top-grid {
       display: grid;
-      grid-template-columns: 160px 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 8px 10px;
       align-items: stretch;
     }
@@ -203,8 +199,7 @@
       color: var(--warn-text);
       font-size: 12px;
       border: 1px solid color-mix(in srgb, var(--warn-text) 25%, var(--border));
-      display: flex;
-      align-items: center;
+      min-height: 68px;
     }
     button {
       width: 100%;
@@ -238,10 +233,10 @@
     <div class="panel">
       <div class="row-title">
         <div class="section-title">Current set</div>
-        <select id="modeSelect" class="mode-select" aria-label="Current set mode">
-          <option value="window">All window tabs</option>
-          <option value="highlighted">Highlighted tabs</option>
-        </select>
+        <div class="mode-inline" role="radiogroup" aria-label="Current set mode">
+          <label class="mode-card"><input type="radio" name="mode" value="window" checked> All window tabs</label>
+          <label class="mode-card"><input type="radio" name="mode" value="highlighted"> Highlighted tabs</label>
+        </div>
       </div>
 
       <div id="sourceSummary" class="summary-strip">Current set: 0 unique tab(s)
@@ -287,12 +282,11 @@ Saved set: 0 item(s)</div>
         </div>
       </details>
 
-      <div class="actions-grid">
-        <button id="mergeBtn">Merge into saved set</button>
+      <div class="action-top-grid">
         <div id="mergeInfo" class="warning-box"></div>
-
-        <button id="syncBtn" class="danger-btn">Sync saved set</button>
         <div id="syncInfo" class="warning-box"></div>
+        <button id="mergeBtn">Merge into saved set</button>
+        <button id="syncBtn" class="danger-btn">Sync saved set</button>
       </div>
 
       <div id="status"></div>
