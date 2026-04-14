@@ -1,11 +1,11 @@
 {
-  "manifest_version": 2,
-  "name": "Selected Tabs Bookmark Manager",
-  "version": "1.1.0",
-  "description": "Save highlighted tabs into bookmark folders, with support for existing folders, new child folders, and safe overwrite options.",
+  "manifest_version": 3,
+  "name": "Workspace Sync",
+  "version": "2.0.0",
+  "description": "Compare a browser workspace with a bookmark folder and sync the folder to match or merge the current tabs.",
   "permissions": ["tabs", "bookmarks", "storage"],
   "action": {
-    "default_title": "Selected Tabs Bookmark Manager",
+    "default_title": "Workspace Sync",
     "default_popup": "popup.html"
   },
   "icons": {

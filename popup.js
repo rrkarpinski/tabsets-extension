@@ -1,19 +1,22 @@
 const STORAGE_KEY_LAST_FOLDER_ID = 'lastSelectedFolderId';
 
 const folderSelect = document.getElementById('folderSelect');
-const saveDirectly = document.getElementById('saveDirectly');
-const childFolderWrap = document.getElementById('childFolderWrap');
-const childFolderName = document.getElementById('childFolderName');
-const writeModeWrap = document.getElementById('writeModeWrap');
-const highlightCount = document.getElementById('highlightCount');
-const folderWarning = document.getElementById('folderWarning');
-const saveBtn = document.getElementById('saveBtn');
+const folderPathPreview = document.getElementById('folderPathPreview');
+const sourceSummary = document.getElementById('sourceSummary');
+const sameCount = document.getElementById('sameCount');
+const addCount = document.getElementById('addCount');
+const removeCount = document.getElementById('removeCount');
+const sameList = document.getElementById('sameList');
+const addList = document.getElementById('addList');
+const removeList = document.getElementById('removeList');
+const warningBox = document.getElementById('warningBox');
+const mergeBtn = document.getElementById('mergeBtn');
+const syncBtn = document.getElementById('syncBtn');
 const statusEl = document.getElementById('status');
 
-let highlightedTabs = [];
 let folderMap = new Map();
 let protectedFolderIds = new Set();
-let overwriteDecision = null;
+let currentDiff = null;
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -49,15 +52,8 @@ function flattenFolders(nodes, depth = 0, out = []) {
   return out;
 }
 
-function getSelectedWriteMode() {
-  return document.querySelector('input[name="writeMode"]:checked').value;
-}
-
-function filterBookmarkableTabs(tabs) {
-  return tabs.filter(tab => {
-    const url = tab.url || '';
-    return /^https?:/i.test(url) || /^file:/i.test(url);
-  });
+function getSelectedSourceMode() {
+  return document.querySelector('input[name="sourceMode"]:checked').value;
 }
 
 function isDirectChildOfRoot(folder) {
@@ -82,18 +78,22 @@ function buildFolderPath(folderId) {
   return parts.join('/');
 }
 
-async function loadHighlightedTabs() {
-  const tabs = await chrome.tabs.query({ highlighted: true, currentWindow: true });
-  highlightedTabs = filterBookmarkableTabs(tabs);
-  highlightCount.textContent = `Highlighted tabs selected: ${highlightedTabs.length}`;
+function filterBookmarkableTabs(tabs) {
+  return tabs.filter(tab => {
+    const url = tab.url || '';
+    return /^https?:/i.test(url) || /^file:/i.test(url);
+  });
+}
 
-  if (highlightedTabs.length === 0) {
-    setStatus('No highlighted bookmarkable tabs found. Highlight tabs first, then reopen the popup.', true);
-    saveBtn.disabled = true;
-  } else {
-    setStatus(`Ready to save ${highlightedTabs.length} highlighted tab(s).`);
-    saveBtn.disabled = false;
+function uniqueByUrl(items) {
+  const map = new Map();
+  for (const item of items) {
+    if (!item.url) continue;
+    if (!map.has(item.url)) {
+      map.set(item.url, item);
+    }
   }
+  return [...map.values()];
 }
 
 async function loadFolders() {
@@ -140,135 +140,116 @@ async function persistSelectedFolder() {
   await chrome.storage.local.set({ [STORAGE_KEY_LAST_FOLDER_ID]: folderId });
 }
 
-async function getFolderChildren(folderId) {
-  return chrome.bookmarks.getChildren(folderId);
-}
-
-function resetOverwriteDecision() {
-  overwriteDecision = null;
-}
-
-function renderOverwriteWarning(message, actions = []) {
-  folderWarning.innerHTML = '';
-  folderWarning.classList.remove('hidden');
-
-  const text = document.createElement('div');
-  text.textContent = message;
-  folderWarning.appendChild(text);
-
-  if (actions.length > 0) {
-    const actionsWrap = document.createElement('div');
-    actionsWrap.className = 'warning-actions';
-
-    for (const action of actions) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = action.label;
-      if (action.secondary) button.classList.add('secondary-btn');
-      button.addEventListener('click', action.onClick);
-      actionsWrap.appendChild(button);
-    }
-
-    folderWarning.appendChild(actionsWrap);
+async function getSourceTabs() {
+  const mode = getSelectedSourceMode();
+  if (mode === 'highlighted') {
+    const highlighted = await chrome.tabs.query({ highlighted: true, currentWindow: true });
+    return uniqueByUrl(filterBookmarkableTabs(highlighted));
   }
+  const windowTabs = await chrome.tabs.query({ currentWindow: true });
+  return uniqueByUrl(filterBookmarkableTabs(windowTabs));
 }
 
-function clearWarning() {
-  folderWarning.innerHTML = '';
-  folderWarning.classList.add('hidden');
+async function getFolderBookmarks(folderId) {
+  const children = await chrome.bookmarks.getChildren(folderId);
+  return uniqueByUrl(children.filter(item => !!item.url));
 }
 
-function updateModeVisibility() {
-  const direct = saveDirectly.checked;
-  childFolderWrap.classList.toggle('hidden', direct);
-  writeModeWrap.classList.toggle('hidden', !direct);
+function makeUrlMap(items) {
+  return new Map(items.map(item => [item.url, item]));
 }
 
-async function updateFolderWarning() {
-  clearWarning();
-
-  if (!saveDirectly.checked || getSelectedWriteMode() !== 'overwrite') {
+function renderUrlList(element, items) {
+  if (!items.length) {
+    element.innerHTML = '<li>None</li>';
     return;
   }
 
+  element.innerHTML = items
+    .slice(0, 50)
+    .map(item => `<li>${escapeHtml(item.title || item.url)} — ${escapeHtml(item.url)}</li>`)
+    .join('');
+
+  if (items.length > 50) {
+    element.innerHTML += `<li>...and ${items.length - 50} more</li>`;
+  }
+}
+
+function computeDiff(sourceTabs, folderBookmarks) {
+  const sourceMap = makeUrlMap(sourceTabs);
+  const folderMapByUrl = makeUrlMap(folderBookmarks);
+
+  const same = [];
+  const add = [];
+  const remove = [];
+
+  for (const tab of sourceTabs) {
+    if (folderMapByUrl.has(tab.url)) same.push(tab);
+    else add.push(tab);
+  }
+
+  for (const bookmark of folderBookmarks) {
+    if (!sourceMap.has(bookmark.url)) remove.push(bookmark);
+  }
+
+  return { sourceTabs, folderBookmarks, same, add, remove };
+}
+
+function renderDiff(diff) {
+  currentDiff = diff;
+  sameCount.textContent = String(diff.same.length);
+  addCount.textContent = String(diff.add.length);
+  removeCount.textContent = String(diff.remove.length);
+
+  renderUrlList(sameList, diff.same);
+  renderUrlList(addList, diff.add);
+  renderUrlList(removeList, diff.remove);
+
+  sourceSummary.textContent = `Source contains ${diff.sourceTabs.length} unique bookmarkable tab(s). Folder contains ${diff.folderBookmarks.length} bookmark(s).`;
+
+  if (diff.add.length === 0 && diff.remove.length === 0) {
+    warningBox.textContent = 'Workspace and folder are already in sync. Merge and sync would make no changes.';
+  } else if (diff.remove.length === 0) {
+    warningBox.textContent = `Merge will add ${diff.add.length} bookmark(s). Sync will produce the same result because there are no folder-only bookmarks to remove.`;
+  } else {
+    warningBox.textContent = `Merge will add ${diff.add.length} bookmark(s) and remove nothing. Sync will add ${diff.add.length} bookmark(s) and remove ${diff.remove.length} folder-only bookmark(s) so the folder matches the source exactly.`;
+  }
+}
+
+async function refreshDiff() {
   const folderId = folderSelect.value;
-  if (!folderId) return;
+  if (!folderId) {
+    setStatus('Please choose a target folder.', true);
+    mergeBtn.disabled = true;
+    syncBtn.disabled = true;
+    return;
+  }
+
+  const folderPath = buildFolderPath(folderId);
+  folderPathPreview.textContent = folderPath ? `Target path: ${folderPath}` : '';
+
+  const sourceTabs = await getSourceTabs();
+  const folderBookmarks = await getFolderBookmarks(folderId);
+  const diff = computeDiff(sourceTabs, folderBookmarks);
+  renderDiff(diff);
 
   const selectedFolder = folderMap.get(folderId);
-  if (isProtectedOverwriteFolder(folderId) && isDirectChildOfRoot(selectedFolder)) {
-    renderOverwriteWarning(
-      'Overwrite is disabled for top-level folders like Bookmarks Bar and Other bookmarks. You can still append there or create a child folder inside them.'
-    );
+  const noSourceTabs = diff.sourceTabs.length === 0;
+
+  mergeBtn.disabled = noSourceTabs;
+  syncBtn.disabled = noSourceTabs || (isProtectedOverwriteFolder(folderId) && isDirectChildOfRoot(selectedFolder));
+
+  if (noSourceTabs) {
+    setStatus('No bookmarkable tabs found in the selected source mode.', true);
     return;
   }
 
-  const children = await getFolderChildren(folderId);
-  const subfolders = children.filter(item => !item.url);
-  const bookmarks = children.filter(item => !!item.url);
-
-  if (subfolders.length > 0) {
-    if (overwriteDecision !== null) {
-      renderOverwriteWarning(
-        overwriteDecision.recursive
-          ? `This folder contains ${bookmarks.length} bookmark(s) and ${subfolders.length} subfolder(s). Selected overwrite mode: recursive overwrite.`
-          : `This folder contains ${bookmarks.length} bookmark(s) and ${subfolders.length} subfolder(s). Selected overwrite mode: overwrite bookmarks and keep folders.`,
-        [
-          {
-            label: 'Change to recursive overwrite',
-            onClick: () => {
-              overwriteDecision = { recursive: true };
-              updateFolderWarning();
-            }
-          },
-          {
-            label: 'Change to keep folders',
-            onClick: () => {
-              overwriteDecision = { recursive: false };
-              updateFolderWarning();
-            }
-          }
-        ]
-      );
-      return;
-    }
-
-    renderOverwriteWarning(
-      `This folder currently contains ${bookmarks.length} bookmark(s) and ${subfolders.length} subfolder(s). Choose how overwrite should behave:`,
-      [
-        {
-          label: 'Overwrite recursively',
-          onClick: () => {
-            overwriteDecision = { recursive: true };
-            updateFolderWarning();
-          }
-        },
-        {
-          label: 'Overwrite bookmarks, keep folders',
-          onClick: () => {
-            overwriteDecision = { recursive: false };
-            updateFolderWarning();
-          }
-        }
-      ]
-    );
+  if (syncBtn.disabled && isProtectedOverwriteFolder(folderId) && isDirectChildOfRoot(selectedFolder)) {
+    setStatus('Sync is disabled for top-level folders like Bookmarks Bar and Other bookmarks. You can still merge into them.', true);
     return;
   }
 
-  overwriteDecision = { recursive: false };
-  renderOverwriteWarning(
-    `This folder currently contains ${bookmarks.length} bookmark(s) and no subfolders. Overwrite will replace those bookmarks only.`
-  );
-}
-
-async function removeFolderContents(folderId, recursive) {
-  const children = await chrome.bookmarks.getChildren(folderId);
-  for (const child of children) {
-    if (child.url) {
-      await chrome.bookmarks.remove(child.id);
-    } else if (recursive) {
-      await chrome.bookmarks.removeTree(child.id);
-    }
-  }
+  setStatus('Diff updated.');
 }
 
 async function createBookmarks(folderId, tabs) {
@@ -281,102 +262,96 @@ async function createBookmarks(folderId, tabs) {
   }
 }
 
-async function handleSave() {
+async function removeBookmarksByUrl(folderId, urlsToRemove) {
+  if (!urlsToRemove.length) return;
+  const children = await chrome.bookmarks.getChildren(folderId);
+  for (const child of children) {
+    if (child.url && urlsToRemove.includes(child.url)) {
+      await chrome.bookmarks.remove(child.id);
+    }
+  }
+}
+
+async function handleMerge() {
   try {
-    saveBtn.disabled = true;
-    setStatus('Working...');
+    mergeBtn.disabled = true;
+    syncBtn.disabled = true;
+    setStatus('Merging...');
 
-    if (highlightedTabs.length === 0) {
-      throw new Error('No highlighted bookmarkable tabs found.');
+    if (!currentDiff) {
+      throw new Error('No diff available.');
     }
 
-    const selectedFolderId = folderSelect.value;
-    if (!selectedFolderId) {
-      throw new Error('Please choose a folder.');
-    }
+    const folderId = folderSelect.value;
+    const addedCount = currentDiff.add.length;
 
     await persistSelectedFolder();
+    await createBookmarks(folderId, currentDiff.add);
+    await refreshDiff();
 
-    let targetFolderId = selectedFolderId;
-
-    if (!saveDirectly.checked) {
-      const name = childFolderName.value.trim();
-      if (!name) {
-        throw new Error('Please enter a name for the new child folder.');
-      }
-
-      const createdFolder = await chrome.bookmarks.create({
-        parentId: selectedFolderId,
-        title: name
-      });
-
-      targetFolderId = createdFolder.id;
-      folderMap.set(createdFolder.id, {
-        id: createdFolder.id,
-        rawTitle: name,
-        title: name,
-        parentId: selectedFolderId
-      });
-    } else {
-      const writeMode = getSelectedWriteMode();
-      const selectedFolder = folderMap.get(selectedFolderId);
-
-      if (writeMode === 'overwrite') {
-        if (isProtectedOverwriteFolder(selectedFolderId) && isDirectChildOfRoot(selectedFolder)) {
-          throw new Error('Overwrite is not allowed for Bookmarks Bar or Other bookmarks.');
-        }
-
-        if (overwriteDecision === null) {
-          throw new Error('Please choose the overwrite behavior in the warning box first.');
-        }
-
-        await removeFolderContents(selectedFolderId, overwriteDecision.recursive);
-      }
-    }
-
-    const fullPath =
-      buildFolderPath(targetFolderId) ||
-      folderMap.get(targetFolderId)?.rawTitle ||
-      'selected folder';
-
-    await createBookmarks(targetFolderId, highlightedTabs);
-    setStatus(`Saved ${highlightedTabs.length} highlighted tab(s) to "${fullPath}".`);
+    const path = buildFolderPath(folderId) || 'selected folder';
+    setStatus(`Merged workspace into "${path}". Added ${addedCount} new bookmark(s).`);
   } catch (error) {
     setStatus(error.message || String(error), true);
   } finally {
-    saveBtn.disabled = highlightedTabs.length === 0;
+    await refreshDiff().catch(() => {});
+  }
+}
+
+async function handleSync() {
+  try {
+    mergeBtn.disabled = true;
+    syncBtn.disabled = true;
+    setStatus('Syncing...');
+
+    if (!currentDiff) {
+      throw new Error('No diff available.');
+    }
+
+    const folderId = folderSelect.value;
+    const selectedFolder = folderMap.get(folderId);
+    const addTotal = currentDiff.add.length;
+    const removeTotal = currentDiff.remove.length;
+
+    if (isProtectedOverwriteFolder(folderId) && isDirectChildOfRoot(selectedFolder)) {
+      throw new Error('Sync is not allowed for Bookmarks Bar or Other bookmarks.');
+    }
+
+    await persistSelectedFolder();
+    await removeBookmarksByUrl(folderId, currentDiff.remove.map(item => item.url));
+    await createBookmarks(folderId, currentDiff.add);
+    await refreshDiff();
+
+    const path = buildFolderPath(folderId) || 'selected folder';
+    setStatus(`Synced folder "${path}". Added ${addTotal} and removed ${removeTotal} bookmark(s).`);
+  } catch (error) {
+    setStatus(error.message || String(error), true);
+  } finally {
+    await refreshDiff().catch(() => {});
   }
 }
 
 folderSelect.addEventListener('change', async () => {
-  resetOverwriteDecision();
   await persistSelectedFolder();
-  await updateFolderWarning();
+  await refreshDiff();
 });
 
-saveDirectly.addEventListener('change', async () => {
-  resetOverwriteDecision();
-  updateModeVisibility();
-  await updateFolderWarning();
-});
-
-for (const radio of document.querySelectorAll('input[name="writeMode"]')) {
+for (const radio of document.querySelectorAll('input[name="sourceMode"]')) {
   radio.addEventListener('change', async () => {
-    resetOverwriteDecision();
-    await updateFolderWarning();
+    await refreshDiff();
   });
 }
 
-saveBtn.addEventListener('click', handleSave);
+mergeBtn.addEventListener('click', handleMerge);
+syncBtn.addEventListener('click', handleSync);
 
 (async function init() {
   try {
     await loadFolders();
-    await loadHighlightedTabs();
-    updateModeVisibility();
-    await updateFolderWarning();
+    await refreshDiff();
   } catch (error) {
     setStatus('Failed to initialize popup: ' + (error.message || error), true);
-    saveBtn.disabled = true;
+    mergeBtn.disabled = true;
+    syncBtn.disabled = true;
   }
 })();
