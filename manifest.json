@@ -1,8 +1,8 @@
 {
   "manifest_version": 4,
   "name": "TabSets Sync",
-  "version": "2.1.0",
-  "description": "Compare your current tab set with a saved set stored as a bookmark folder, then merge or sync changes.",
+  "version": "2.2.0",
+  "description": "Track changes between your current tabs and a saved tab set. Stored as a bookmark folder.",
   "permissions": ["tabs", "bookmarks", "storage"],
   "action": {
     "default_title": "TabSets Sync",

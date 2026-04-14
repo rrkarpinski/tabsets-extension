@@ -1,16 +1,18 @@
 const STORAGE_KEY_LAST_FOLDER_ID = 'lastSelectedFolderId';
 
-const modeSelect = document.getElementById('modeSelect');
+const modeInputs = [...document.querySelectorAll('input[name="mode"]')];
 const folderSelect = document.getElementById('folderSelect');
 const folderPathPreview = document.getElementById('folderPathPreview');
-const sourceSummary = document.getElementById('sourceSummary');
+const currentSummary = document.getElementById('currentSummary');
+const savedSummary = document.getElementById('savedSummary');
 const sameCount = document.getElementById('sameCount');
 const addCount = document.getElementById('addCount');
 const removeCount = document.getElementById('removeCount');
 const sameList = document.getElementById('sameList');
 const addList = document.getElementById('addList');
 const removeList = document.getElementById('removeList');
-const warningBox = document.getElementById('warningBox');
+const mergeInfo = document.getElementById('mergeInfo');
+const syncInfo = document.getElementById('syncInfo');
 const mergeBtn = document.getElementById('mergeBtn');
 const syncBtn = document.getElementById('syncBtn');
 const statusEl = document.getElementById('status');
@@ -31,6 +33,11 @@ function escapeHtml(text) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function shortenText(text, max = 42) {
+  if (!text) return '';
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
 
 function folderDepthTitle(node, depth) {
@@ -86,9 +93,7 @@ function uniqueByUrl(items) {
   const map = new Map();
   for (const item of items) {
     if (!item.url) continue;
-    if (!map.has(item.url)) {
-      map.set(item.url, item);
-    }
+    if (!map.has(item.url)) map.set(item.url, item);
   }
   return [...map.values()];
 }
@@ -99,13 +104,10 @@ async function loadFolders() {
   folderMap = new Map(folders.map(folder => [folder.id, folder]));
 
   protectedFolderIds = new Set(
-    folders
-      .filter(folder => folder.parentId === '0' && folder.rawTitle !== '(untitled folder)')
-      .map(folder => folder.id)
+    folders.filter(folder => folder.parentId === '0' && folder.rawTitle !== '(untitled folder)').map(folder => folder.id)
   );
 
   const selectableFolders = folders.filter(folder => folder.id !== '0');
-
   folderSelect.innerHTML = selectableFolders
     .map(folder => `<option value="${escapeHtml(folder.id)}">${escapeHtml(folder.title)}</option>`)
     .join('');
@@ -118,27 +120,20 @@ async function loadFolders() {
     return;
   }
 
-  const bookmarksBar = selectableFolders.find(
-    folder => folder.parentId === '0' && /bookmark/i.test(folder.rawTitle) && /bar/i.test(folder.rawTitle)
-  );
-  const otherBookmarks = selectableFolders.find(
-    folder => folder.parentId === '0' && /other/i.test(folder.rawTitle)
-  );
+  const bookmarksBar = selectableFolders.find(folder => folder.parentId === '0' && /bookmark/i.test(folder.rawTitle) && /bar/i.test(folder.rawTitle));
+  const otherBookmarks = selectableFolders.find(folder => folder.parentId === '0' && /other/i.test(folder.rawTitle));
   const fallback = bookmarksBar || otherBookmarks || selectableFolders[0];
-
-  if (fallback) {
-    folderSelect.value = fallback.id;
-  }
+  if (fallback) folderSelect.value = fallback.id;
 }
 
 async function persistSelectedFolder() {
   const folderId = folderSelect.value;
-  if (!folderId) return;
-  await chrome.storage.local.set({ [STORAGE_KEY_LAST_FOLDER_ID]: folderId });
+  if (folderId) await chrome.storage.local.set({ [STORAGE_KEY_LAST_FOLDER_ID]: folderId });
 }
 
 async function getCurrentSetTabs() {
-  if (modeSelect.value === 'highlighted') {
+  const mode = modeInputs.find(input => input.checked)?.value || 'window';
+  if (mode === 'highlighted') {
     const highlighted = await chrome.tabs.query({ highlighted: true, currentWindow: true });
     return uniqueByUrl(filterBookmarkableTabs(highlighted));
   }
@@ -157,28 +152,27 @@ function makeUrlMap(items) {
 
 function renderItemList(element, items) {
   if (!items.length) {
-    element.innerHTML = '<li class="details-item"><div class="details-title">None</div></li>';
+    element.innerHTML = '<li class="details-entry">None</li>';
     return;
   }
 
-  element.innerHTML = items
-    .slice(0, 50)
-    .map(item => {
-      const title = escapeHtml(item.title || item.url);
-      const url = escapeHtml(item.url);
-      return `<li class="details-item"><div class="details-title">${title}</div><div class="details-url">${url}</div></li>`;
-    })
-    .join('');
+  element.innerHTML = items.slice(0, 50).map(item => {
+    const fullTitle = item.title || item.url;
+    const shortTitle = shortenText(fullTitle, 42);
+    const title = escapeHtml(shortTitle);
+    const fullTitleEsc = escapeHtml(fullTitle);
+    const url = escapeHtml(item.url);
+    return `<li class="details-entry" title="${fullTitleEsc}"><span class="details-name">${title}</span> <span class="details-url">(${url})</span></li>`;
+  }).join('');
 
   if (items.length > 50) {
-    element.innerHTML += `<li class="details-item"><div class="details-title">...and ${items.length - 50} more</div></li>`;
+    element.innerHTML += `<li class="details-entry">...and ${items.length - 50} more</li>`;
   }
 }
 
 function computeDiff(currentSetTabs, savedSetBookmarks) {
   const currentMap = makeUrlMap(currentSetTabs);
   const savedMap = makeUrlMap(savedSetBookmarks);
-
   const same = [];
   const add = [];
   const remove = [];
@@ -205,14 +199,18 @@ function renderDiff(diff) {
   renderItemList(addList, diff.add);
   renderItemList(removeList, diff.remove);
 
-  sourceSummary.textContent = `Current set contains ${diff.currentSetTabs.length} unique tab(s). Saved set contains ${diff.savedSetBookmarks.length} bookmark(s).`;
+  currentSummary.textContent = `Current set: ${diff.currentSetTabs.length} tab(s)`;
+  savedSummary.textContent = `Saved set: ${diff.savedSetBookmarks.length} tab(s)`;
 
   if (diff.add.length === 0 && diff.remove.length === 0) {
-    warningBox.textContent = 'Merge: no changes.\nSync: no changes. The current set already matches the saved set.';
+    mergeInfo.textContent = 'No changes. Current tabs are already saved.';
+    syncInfo.textContent = 'No changes. The saved set already matches the current set.';
   } else if (diff.remove.length === 0) {
-    warningBox.textContent = `Merge: add ${diff.add.length} tab(s) to the saved set.\nSync: same result. Nothing would be removed from the saved set.`;
+    mergeInfo.textContent = `Add ${diff.add.length} tab(s) to the saved tab set.`;
+    syncInfo.textContent = 'Same result as merge. Nothing would be removed.';
   } else {
-    warningBox.textContent = `Merge: add ${diff.add.length} tab(s) to the saved set.\nSync: add ${diff.add.length} tab(s) and remove ${diff.remove.length} item(s) that exist only in the saved set.`;
+    mergeInfo.textContent = `Add ${diff.add.length} tab(s). Remove nothing.`;
+    syncInfo.textContent = `Add ${diff.add.length} tab(s). Remove ${diff.remove.length} item(s) only in the saved tab set.`;
   }
 }
 
@@ -225,9 +223,7 @@ async function refreshDiff() {
     return;
   }
 
-  const folderPath = buildFolderPath(folderId);
-  folderPathPreview.textContent = folderPath ? `Path: ${folderPath}` : '';
-
+  folderPathPreview.textContent = buildFolderPath(folderId) ? `Path: ${buildFolderPath(folderId)}` : '';
   const currentSetTabs = await getCurrentSetTabs();
   const savedSetBookmarks = await getSavedSetBookmarks(folderId);
   const diff = computeDiff(currentSetTabs, savedSetBookmarks);
@@ -235,7 +231,6 @@ async function refreshDiff() {
 
   const selectedFolder = folderMap.get(folderId);
   const noCurrentTabs = diff.currentSetTabs.length === 0;
-
   mergeBtn.disabled = noCurrentTabs;
   syncBtn.disabled = noCurrentTabs || (isProtectedTopLevelFolder(folderId) && isDirectChildOfRoot(selectedFolder));
 
@@ -254,11 +249,7 @@ async function refreshDiff() {
 
 async function createBookmarks(folderId, tabs) {
   for (const tab of tabs) {
-    await chrome.bookmarks.create({
-      parentId: folderId,
-      title: tab.title || tab.url,
-      url: tab.url
-    });
+    await chrome.bookmarks.create({ parentId: folderId, title: tab.title || tab.url, url: tab.url });
   }
 }
 
@@ -278,20 +269,14 @@ async function handleMerge() {
     mergeBtn.disabled = true;
     syncBtn.disabled = true;
     setStatus('Merging...');
-
-    if (!currentDiff) {
-      throw new Error('No diff available.');
-    }
+    if (!currentDiff) throw new Error('No diff available.');
 
     const folderId = folderSelect.value;
     const addedCount = currentDiff.add.length;
-
     await persistSelectedFolder();
     await createBookmarks(folderId, currentDiff.add);
     await refreshDiff();
-
-    const path = buildFolderPath(folderId) || 'saved set';
-    setStatus(`Merged current set into "${path}". Added ${addedCount} item(s).`);
+    setStatus(`Merged current set into "${buildFolderPath(folderId) || 'saved set'}". Added ${addedCount} item(s).`);
   } catch (error) {
     setStatus(error.message || String(error), true);
   } finally {
@@ -304,10 +289,7 @@ async function handleSync() {
     mergeBtn.disabled = true;
     syncBtn.disabled = true;
     setStatus('Syncing...');
-
-    if (!currentDiff) {
-      throw new Error('No diff available.');
-    }
+    if (!currentDiff) throw new Error('No diff available.');
 
     const folderId = folderSelect.value;
     const selectedFolder = folderMap.get(folderId);
@@ -322,9 +304,7 @@ async function handleSync() {
     await removeBookmarksByUrl(folderId, currentDiff.remove.map(item => item.url));
     await createBookmarks(folderId, currentDiff.add);
     await refreshDiff();
-
-    const path = buildFolderPath(folderId) || 'saved set';
-    setStatus(`Synced "${path}". Added ${addTotal} item(s) and removed ${removeTotal} item(s).`);
+    setStatus(`Synced "${buildFolderPath(folderId) || 'saved set'}". Added ${addTotal} tab(s) and removed ${removeTotal} tab(s).`);
   } catch (error) {
     setStatus(error.message || String(error), true);
   } finally {
@@ -332,7 +312,7 @@ async function handleSync() {
   }
 }
 
-modeSelect.addEventListener('change', refreshDiff);
+modeInputs.forEach(input => input.addEventListener('change', refreshDiff));
 folderSelect.addEventListener('change', async () => {
   await persistSelectedFolder();
   await refreshDiff();

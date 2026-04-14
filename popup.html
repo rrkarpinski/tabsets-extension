@@ -68,14 +68,21 @@
     .row-title {
       display: grid;
       grid-template-columns: auto 1fr;
-      align-items: center;
+      align-items: start;
       gap: 12px;
       margin-bottom: 8px;
     }
     .section-title {
-      font-size: 13px;
+      font-size: 16px;
       font-weight: 700;
       margin: 0;
+      line-height: 1.2;
+    }
+    .section-subnote {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.3;
     }
     .mode-inline {
       display: grid;
@@ -228,23 +235,31 @@
 <body>
   <div class="wrap">
     <h1>TabSets Sync</h1>
-    <p class="note">Track changes between your current tabs and a saved tab set. Stored as a bookmark folder.</p>
+    <p class="note">Track changes between your current tabs and a saved tab set. Store it as a bookmark folder.</p>
 
     <div class="panel">
       <div class="row-title">
-        <div class="section-title">Current set</div>
+        <div>
+          <div class="section-title">Current set</div>
+          
+        </div>
         <div class="mode-inline" role="radiogroup" aria-label="Current set mode">
           <label class="mode-card"><input type="radio" name="mode" value="window" checked> All window tabs</label>
           <label class="mode-card"><input type="radio" name="mode" value="highlighted"> Highlighted tabs</label>
         </div>
       </div>
+      <div id="currentSummary" class="summary-strip">Current set: 0 tab(s)</div>
 
-      <div id="sourceSummary" class="summary-strip">Current set: 0 unique tab(s)
-Saved set: 0 item(s)</div>
-
-      <label for="folderSelect">Saved set folder</label>
-      <div class="helper">Choose the bookmark folder that stores this tab set.</div>
-      <select id="folderSelect"></select>
+      <div class="row-title">
+        <div>
+          <div class="section-title">Saved set</div>
+          <div class="section-subnote">Bookmark folder that stores this tab set</div>
+        </div>
+        <div>
+          <select id="folderSelect"></select>
+        </div>
+      </div>
+      <div id="savedSummary" class="summary-strip">Saved set: 0 tab(s)</div>
       <div id="folderPathPreview" class="path-preview"></div>
 
       <div class="section-title">Diff</div>
@@ -267,6 +282,11 @@ Saved set: 0 item(s)</div>
         <summary>Show diff details</summary>
 
         <div class="details-section">
+          <div class="details-section-title">Already saved</div>
+          <ul id="sameList" class="details-list"></ul>
+        </div>
+
+        <div class="details-section">
           <div class="details-section-title">Only in current set</div>
           <ul id="addList" class="details-list"></ul>
         </div>
@@ -274,11 +294,6 @@ Saved set: 0 item(s)</div>
         <div class="details-section">
           <div class="details-section-title">Only in saved set</div>
           <ul id="removeList" class="details-list"></ul>
-        </div>
-
-        <div class="details-section">
-          <div class="details-section-title">Already saved</div>
-          <ul id="sameList" class="details-list"></ul>
         </div>
       </details>
 
